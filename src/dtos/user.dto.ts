@@ -1,15 +1,22 @@
-import { z } from "zod";
+import z from "zod";
 
-export const registerDto = z.object({
+export const CreateUserDTO = z
+  .object({
+    email: z.string().email(),
+    username: z.string().min(3),
+    password: z.string().min(6),
+    confirmPassword: z.string().min(6),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export type CreateUserDTO = z.infer<typeof CreateUserDTO>;
+
+export const LoginUserDTO = z.object({
   email: z.string().email(),
-  username: z.string(),
   password: z.string().min(6),
-  confirmPassword: z.string(),
-  firstName: z.string(),
-  lastName: z.string(),
 });
 
-export const loginDto = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
+export type LoginUserDTO = z.infer<typeof LoginUserDTO>;
