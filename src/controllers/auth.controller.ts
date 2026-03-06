@@ -1,62 +1,99 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
+import { registerUserDto, loginUserDto } from "../dtos/user.dto";
+import { sendEmail } from "../config/email";
 import { UserService } from "../services/user.service";
-import { CreateUserDTO, LoginUserDTO } from "../dtos/user.dto";
-import z from "zod";
 
 const userService = new UserService();
 
 export class AuthController {
   async register(req: Request, res: Response) {
     try {
-      const parsed = CreateUserDTO.safeParse(req.body);
-
-      if (!parsed.success) {
-        return res.status(400).json({
-          success: false,
-          message: z.prettifyError(parsed.error),
-        });
-      }
-
-      const user = await userService.register(parsed.data);
-
-      return res.status(201).json({
+      const data = registerUserDto.parse(req.body);
+      const user = await userService.createUser(data);
+      res.status(201).json({
         success: true,
-        message: "User registered successfully",
         data: user,
       });
-    } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+    } catch (err: any) {
+      res.status(err.statusCode || 400).json({
         success: false,
-        message: error.message,
+        error: err.message,
       });
     }
   }
 
   async login(req: Request, res: Response) {
     try {
-      const parsed = LoginUserDTO.safeParse(req.body);
-
-      if (!parsed.success) {
-        return res.status(400).json({
-          success: false,
-          message: z.prettifyError(parsed.error),
-        });
-      }
-
-      const result = await userService.login(parsed.data);
-
-      return res.status(200).json({
+      const data = loginUserDto.parse(req.body);
+      const result = await userService.loginUser(data);
+      res.status(200).json({
         success: true,
-        message: "Login successful",
-        token: result.token,
-        user: result.user,
+        ...result,
       });
-    } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+    } catch (err: any) {
+      res.status(err.statusCode || 400).json({
         success: false,
-        message: error.message,
+        error: err.message,
       });
     }
   }
-}
 
+  async forgotPassword(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const resetToken = crypto.randomBytes(32).toString("hex");
+
+      await userService.setResetPasswordToken(email, resetToken);
+
+      const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+
+      await sendEmail(
+        email,
+        "Reset your password",
+        `
+          <p>You requested a password reset.</p>
+          <p>Click the link below to reset your password:</p>
+          <a href="${resetLink}" target="_blank">${resetLink}</a>
+          <p>This link will expire in 15 minutes.</p>
+        `
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset link has been sent to your email",
+      });
+    } catch (err: any) {
+      res.status(err.statusCode || 400).json({
+        success: false,
+        error: err.message,
+      });
+    }
+  }
+
+  async resetPassword(req: Request, res: Response) {
+    try {
+      const { token, password } = req.body;
+
+      if (!token || !password) {
+        return res.status(400).json({
+          error: "Token and new password are required",
+        });
+      }
+
+      await userService.resetPassword(token, password);
+
+      res.status(200).json({
+        success: true,
+        message: "Password has been reset successfully",
+      });
+    } catch (err: any) {
+      res.status(err.statusCode || 400).json({ error: err.message });
+    }
+  }
+}

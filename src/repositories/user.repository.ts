@@ -1,16 +1,23 @@
-import { UserModel, IUser } from "../models/user.model";
+import UserModel, { IUser } from "../models/user.model";
 
 export class UserRepository {
-  async getUserByEmail(email: string): Promise<IUser | null> {
-    return UserModel.findOne({ email });
+  async getUserById(id: string) {
+    return UserModel.findById(id);
   }
 
-  async getUserByUsername(username: string): Promise<IUser | null> {
-    return UserModel.findOne({ username });
+  async createUser(user: Partial<IUser>) {
+    return UserModel.create(user);
   }
 
-  async createUser(data: Partial<IUser>): Promise<IUser> {
-    const user = new UserModel(data);
-    return user.save();
+  async findUserByEmail(email: string) {
+    // FIXED: select +password since password has select:false in schema now
+    return UserModel.findOne({ email }).select("+password +resetPasswordToken +resetPasswordExpires");
+  }
+
+  async findByResetPasswordToken(token: string) {
+    return UserModel.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() },
+    }).select("+password +resetPasswordToken +resetPasswordExpires");
   }
 }
